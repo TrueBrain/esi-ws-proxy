@@ -1,0 +1,145 @@
+<html>
+    <head>
+        <title>ESI WebSocket Test Client</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+            }
+            h1 {
+                font-size: 1.5em;
+            }
+            div {
+                margin-top: 1em;
+            }
+            span {
+                font-family: monospace;
+                background-color: #f0f0f0;
+                padding: 0.1em 0.2em;
+                margin-bottom: 0.1em;
+                line-height: 1.2em;
+            }
+
+            .content {
+                max-width: 800px;
+                margin: 0 auto;
+                padding: 1em;
+            }
+        </style>
+        <script>
+            var token = "";
+            var code_verifier = window.localStorage.getItem("code_verifier");
+
+            /* Check for "code" parameter in URL. */
+            var urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.has("code")) {
+                var code = urlParams.get("code");
+
+                var payload = "grant_type=authorization_code&code=" + code + "&client_id=78a3020d74f441c794a21333069fca0b&code_verifier=" + code_verifier;
+
+                var xhr = new XMLHttpRequest();
+                xhr.open("POST", "https://login.eveonline.com/v2/oauth/token", true);
+                xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+                xhr.onreadystatechange = function () {
+                    if (xhr.readyState == 4 && xhr.status == 200) {
+                        var response = JSON.parse(xhr.responseText);
+                        token = response.access_token;
+                        document.getElementById("token").value = token;
+                        start();
+                    }
+                };
+                xhr.send(payload);
+
+                window.history.replaceState({}, document.title, "/demo.html");
+            }
+
+            function start() {
+                var ws = new WebSocket((window.location.protocol == "https:" ? "wss://" : "ws://") + window.location.host + "/ws");
+                var message = document.getElementById("message");
+
+                ws.onopen = function () {
+                    var m = document.createElement("div");
+                    m.innerHTML = "Connection is opened";
+                    message.appendChild(m);
+
+                    var payload = {
+                        authenticate: {
+                            token,
+                        },
+                        character: {
+                            get_id: {}
+                        },
+                        location: {
+                            subscribe: {}
+                        }
+                    };
+
+                    ws.send(JSON.stringify(payload));
+                    payload["authenticate"]["token"] = "REDACTED";
+
+                    var m = document.createElement("span");
+                    m.innerHTML = "--> " + JSON.stringify(payload) + "<br/>";
+                    message.appendChild(m);
+                };
+
+                ws.onmessage = function (evt) {
+                    var received_msg = evt.data;
+
+                    var m = document.createElement("span");
+                    m.innerHTML = "<-- " + received_msg + "<br/>";
+                    message.appendChild(m);
+
+                    var received = JSON.parse(received_msg);
+                };
+
+                ws.onclose = function () {
+                    var m = document.createElement("div");
+                    m.innerHTML = "Connection is closed.";
+                    message.appendChild(m);
+                };
+            }
+
+            window.onload = function () {
+                document.getElementById("submit").addEventListener("click", function () {
+                    token = document.getElementById("token").value;
+                    start();
+                });
+
+                document.getElementById("login").addEventListener("click", function () {
+                    code_verifier = "";
+                    var code_challenge = "";
+
+                    var characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+                    for (var i = 0; i < 32; i++) {
+                        code_verifier += characters.charAt(Math.floor(Math.random() * characters.length));
+                    }
+                    code_verifier = btoa(code_verifier).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+
+                    /* Store the code-verifier temporary in the local storage. */
+                    window.localStorage.setItem("code_verifier", code_verifier);
+
+                    crypto.subtle.digest("SHA-256", new TextEncoder().encode(code_verifier)).then(function (hash) {
+                        code_challenge = btoa(String.fromCharCode.apply(null, new Uint8Array(hash))).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+
+                        window.location.href = "https://login.eveonline.com/v2/oauth/authorize/?response_type=code&redirect_uri=" + encodeURIComponent(window.location.href) + "&client_id=78a3020d74f441c794a21333069fca0b&scope=esi-location.read_location.v1&state=mystate&code_challenge=" + code_challenge + "&code_challenge_method=S256";
+                    });
+                });
+            }
+        </script>
+    </head>
+    <body>
+        <div class="content">
+            <h1>ESI WebSocket Test Client</h1>
+            <textarea id="token" placeholder="ESI Access Token with read-location scope" cols="60"></textarea>
+            <button id="submit">Start</button>
+            <button id="login">Login via SSO</button>
+            <div>
+                You can either fill in your own token and hit "Start", or use the "Login via SSO" button.
+                After that, go in-game, get in space, move to another system.
+                You will see you only get a location update once you actually changed system.
+                <br>
+                For an explanation what this site is, please <a href="/index.html">click here</a>.
+            </div>
+            <div id="message"></div>
+        </div>
+    </body>
+</html>

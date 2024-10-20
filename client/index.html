@@ -1,0 +1,118 @@
+<html>
+    <head>
+        <title>ESI WebSocket</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+            }
+            h1 {
+                font-size: 1.5em;
+            }
+            div {
+                margin-top: 1em;
+            }
+            ul {
+                margin-top: 0.5em;
+            }
+            span {
+                font-family: monospace;
+                background-color: #f0f0f0;
+                padding: 0.1em 0.2em;
+            }
+
+            .content {
+                max-width: 800px;
+                margin: 0 auto;
+                padding: 1em;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="content">
+            <h1>ESI WebSocket</h1>
+            <div>
+                One of my (SmallBrain / TrueBrain) main problems with ESI is the complexity to get going.
+                Often I find myself wanting to write a small application that monitors one of my wallets, or my skills, or my location.
+                But then I have to deal with ESI, and the "this should take an hour" explodes into a multi-day effort.
+                And every developer is doing that over and over and over again.
+            </div>
+            <div>
+                It is not that something is actually wrong with ESI, but it is not written for the small developer.
+                There are so many things to consider: how often to poll, how to combine multi-page results, how to deal with cached pages (and multi-page results with different cache-times), dealing with errors, etc etc.
+            </div>
+            <div>
+                So for a while now I have been wondering: how would an easier-to-use interface look like.
+                And there are two trains of thought here: a better REST interface, and a WebSocket interface.
+                This page is a small test for the latter.
+            </div>
+            <div>
+                How it works:
+                <ul>
+                    <li>You create a WebSocket request to this <span>/ws</span> endpoint.</li>
+                    <li>You send a JSON message, which are actually RPC commands, to the server.</li>
+                    <li>The server takes care of all the complexity, and only returns to you what you were looking for.</li>
+                </ul>
+                For example:
+                <ul>
+                    <li>I authenticate with a token <span>{"authenticate": {"token": "..."}}</span>.</li>
+                    <li>I ask for my character ID <span>{"character": {"get_id": {}}}</span>.</li>
+                    <li>I subscribe to my location <span>{"location": {"subscribe": {}}}</span>.</li>
+                </ul>
+                From the server I receive messages containing the content of my request.
+                For example the character ID, or a constant stream of location updates.
+                It is very important to realise here: I do not constant get an update of the same location.
+                I only get notified when the location changes.
+                It is a subscription, not a "poll every 5 seconds".
+            </div>
+            <div>
+                <a href="/demo.html">Test this out yourself!</a>
+            </div>
+            <div>
+                In my mind, this vastly simplifies how to deal with ESI.
+                If I would to implement this on a wallet, you would just subscribe to a wallet, and you get messages when new transactions arrive.
+                No need to deal with any of the other ESI stuff; you just get a message when something happens.
+                In other words: event-driven.
+            </div>
+            <div>
+                This has many other advantages.
+                Just thinking about the waste of bandwidth created by the current ESI is insane.
+                There are enough tools out there that poll location of characters every 5 seconds, only to find out that the location has not changed.
+                Such a waste.
+                And in most of these cases, you are actually only interested in the change; not the current state.
+            </div>
+            <div>
+                And before you wonder: but how about the server resources for all these open websockets?
+                Did you know that a single websocket consumes about as much resources as a single HTTP request?
+                So that if you request the location of a user 12 times a minute, that is far more taxing on a server than a single websockets?
+                <br>
+                The reason why is simple: every HTTP request sends back and forth an insane amount of HTTP headers.
+                A websocket connection only does it once.
+                And here I assume the TCP+TLS connection is actually reused.
+                As setting up a TCP+TLS connection on its own is already expensive.
+                <br>
+                And these days we can even compress websocket channels on HTTP level, meaning they consume so little bandwidth ... and keeping a websocket alive consumes such little resource ...
+            </div>
+            <div>
+                Another note: this might not work for every ESI endpoint.
+                Only endpoints that are most commonly used in an event-driven way are good candidates.
+                It is also not meant to replace current ESI endpoints, but to complement them.
+                <br>
+                For example, the wallet endpoint is a perfect candidate for this.
+                As only the first time you actually want to know what is on the wallet, but after that you just want to receive mutations.
+                Similar for assets, fleet location, etc.
+            </div>
+            <div>
+                And this all started just because I wanted to get a notification on Discord with the profit per hour for incursions I was doing.
+            </div>
+            <div>
+                So what now?
+                This page is just a proof-of-concept, to see what others thing and to collect input.
+                <br>
+                Ideally this of course would run on ESI.
+                And in an even better world, it would directly interact with EVE Online itself, meaning that when your location changes, you get notified instantly.
+                As with wallet transactions, etc.
+                In other words: it would do away with those pesky cache-times the current ESI endpoints have.
+            </div>
+        </div>
+    </body>
+</html>
